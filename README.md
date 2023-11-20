@@ -1,3 +1,3 @@
 # ClashRule-PT
-type: http
+type: http  
 behavior: classical
