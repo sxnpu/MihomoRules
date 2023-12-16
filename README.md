@@ -1,3 +1,4 @@
 # ClashRule-PT
 type: http  
-behavior: classical
+behavior: domain  
+format: text
