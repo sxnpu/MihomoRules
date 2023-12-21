@@ -1,4 +1,4 @@
 # ClashRule-PT
 type: http  
-behavior: domain  
-format: text
+behavior: domain/classical  
+format: text/yaml
