@@ -1,3 +1,5 @@
+# python3 extract_private_trackers.py --src definitions --out PrivateTracker.list
+
 import argparse
 import os
 import re
