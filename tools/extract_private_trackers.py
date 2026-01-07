@@ -45,8 +45,20 @@ def is_private_site(content: str) -> bool:
 
 
 def should_force_rot13(raw: str) -> bool:
+    """
+    判断字符串是否看起来像是被 ROT13 加密过的。
+    增加了对常见 TLD 加密形式的检测 (例如 .com -> .pbd)。
+    """
     rl = raw.lower()
-    return ("uggcf://" in rl) or ("z-grnz" in rl)
+    # 1. 显式的加密前缀
+    if ("uggcf://" in rl) or ("z-grnz" in rl):
+        return True
+
+    rot13_suffixes = [".pbd", ".arg", ".bet", ".pu", ".zr"]
+    if any(rl.endswith(suf) for suf in rot13_suffixes):
+        return True
+        
+    return False
 
 
 ROT13_CALL_RE = re.compile(
@@ -82,6 +94,7 @@ def choose_host_from_urls(raw: str) -> str:
     a = clean_host(raw)
     b = clean_host(rot13(raw))
 
+    # 优先检查是否强制 ROT13 (包含新增的后缀检查)
     if should_force_rot13(raw):
         return b if looks_like_host(b) else a
 
@@ -90,6 +103,8 @@ def choose_host_from_urls(raw: str) -> str:
 
     return a
 
+
+# --- 聚合/格式化逻辑 ---
 
 def label_count(domain: str) -> int:
     return domain.count(".") + 1
@@ -107,33 +122,44 @@ def build_suffix_map(hosts: Set[str]) -> Dict[str, Set[str]]:
     return m
 
 
-def collapse_per_ts_by_longest_suffix(hosts: Set[str], threshold: int = 2) -> List[str]:
+def format_single_host(h: str) -> str:
+    if h.startswith("www."):
+        return f"+.{h[4:]}"
+    else:
+        return f"+.{h}"
+
+
+def process_hosts(hosts: Set[str], threshold: int = 2) -> List[str]:
     remaining = set(h for h in hosts if looks_like_host(h))
-    out: List[str] = []
+    out_lines: Set[str] = set()
 
     while True:
         suf_map = build_suffix_map(remaining)
         cands = [(suf, covered) for suf, covered in suf_map.items() if len(covered) >= threshold]
+        
         if not cands:
             break
 
-        cands.sort(key=lambda x: (-label_count(x[0]), -len(x[1]), x[0]))
+        # 排序：优先覆盖多 -> 优先长后缀 -> 字母序
+        cands.sort(key=lambda x: (-len(x[1]), -label_count(x[0]), x[0]))
         best_suf, covered_hosts = cands[0]
 
-        out.append(f"+.{best_suf}")
+        out_lines.add(f"+.{best_suf}")
         remaining -= covered_hosts
 
-    out.extend(sorted(remaining))
-    out.sort(key=lambda x: (x.startswith("+."), x.lstrip("+.")))
-    return out
+    for h in remaining:
+        formatted = format_single_host(h)
+        out_lines.add(formatted)
+
+    return sorted(list(out_lines), key=lambda x: (not x.startswith("+."), x.lstrip("+.")))
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Extract private tracker hosts from TS definitions (no tldextract, no suffix list).")
+    ap = argparse.ArgumentParser(description="Extract private tracker hosts with aggregation and custom rules.")
     ap.add_argument("--src", required=True, help="Path to extracted definitions folder")
     ap.add_argument("--out", default="PrivateTracker.list", help="Output file (default: PrivateTracker.list)")
     ap.add_argument("--no-comments", action="store_true", help="Do not write '# filename.ts' comment lines")
-    ap.add_argument("--threshold", type=int, default=2, help="Collapse to '+.<suffix>' when >=threshold hosts share it (default: 2)")
+    ap.add_argument("--threshold", type=int, default=2, help="Merge to '+.<suffix>' when >=threshold hosts share it (default: 2)")
     args = ap.parse_args()
 
     ts_paths: List[str] = []
@@ -154,15 +180,17 @@ def main():
 
         hosts: Set[str] = set()
 
+        # 处理 urls
         for val, is_r in extract_array_items(content, "urls"):
             raw = rot13(val) if is_r else val
             h = choose_host_from_urls(raw)
             if looks_like_host(h):
                 hosts.add(h)
 
+        # 处理 formerHosts
         for val, is_r in extract_array_items(content, "formerHosts"):
             raw = rot13(val) if is_r else val
-            h = clean_host(raw)
+            h = choose_host_from_urls(raw)
             if looks_like_host(h):
                 hosts.add(h)
 
@@ -173,7 +201,7 @@ def main():
         if not args.no_comments:
             lines_out.append(f"# {filename}")
 
-        lines_out.extend(collapse_per_ts_by_longest_suffix(hosts, threshold=args.threshold))
+        lines_out.extend(process_hosts(hosts, threshold=args.threshold))
         lines_out.append("")
 
     while lines_out and lines_out[-1] == "":
