@@ -174,10 +174,7 @@ def main():
 
         for match in ARRAY_BLOCK_RE.finditer(content):
             key = match.group("key").lower()
-            
-            # 严格限定：只处理以 "urls" 或 "hosts" 结尾的复数字段
-            # 这样可以匹配: urls, legacyUrls, baseUrls, hosts, formerHosts, ipv6_hosts
-            # 同时排除: searchUrl, rssUrl, posterUrl 等单数路径字段
+
             if key.endswith("urls") or key.endswith("hosts"):
                 block = match.group("block")
                 items = parse_block_items(block)
