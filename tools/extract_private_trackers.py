@@ -22,6 +22,7 @@ def rot13(s: str) -> str:
 
 def clean_host(s: str) -> str:
     s = s.strip()
+    # 简单清洗：去除协议头、开头通配符、路径和端口
     s = s.replace("\\/", "/")
     s = re.sub(r"^\*+\.", "", s)
     s = re.sub(r"^https?://", "", s, flags=re.I)
@@ -174,7 +175,10 @@ def main():
         for match in ARRAY_BLOCK_RE.finditer(content):
             key = match.group("key").lower()
             
-            if "url" in key or "host" in key:
+            # 严格限定：只处理以 "urls" 或 "hosts" 结尾的复数字段
+            # 这样可以匹配: urls, legacyUrls, baseUrls, hosts, formerHosts, ipv6_hosts
+            # 同时排除: searchUrl, rssUrl, posterUrl 等单数路径字段
+            if key.endswith("urls") or key.endswith("hosts"):
                 block = match.group("block")
                 items = parse_block_items(block)
                 
