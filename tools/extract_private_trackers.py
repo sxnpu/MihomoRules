@@ -45,15 +45,10 @@ def is_private_site(content: str) -> bool:
 
 
 def should_force_rot13(raw: str) -> bool:
-    """
-    判断字符串是否看起来像是被 ROT13 加密过的。
-    增加了对常见 TLD 加密形式的检测 (例如 .com -> .pbd)。
-    """
     rl = raw.lower()
-    # 1. 显式的加密前缀
     if ("uggcf://" in rl) or ("z-grnz" in rl):
         return True
-
+    
     rot13_suffixes = [".pbd", ".arg", ".bet", ".pu", ".zr"]
     if any(rl.endswith(suf) for suf in rot13_suffixes):
         return True
@@ -71,13 +66,13 @@ STR_LIT_RE = re.compile(
     re.S,
 )
 
+ARRAY_BLOCK_RE = re.compile(
+    r"""(?P<key>\w+)\s*:\s*\[(?P<block>[\s\S]*?)\]""",
+    re.S
+)
 
-def extract_array_items(content: str, key: str) -> List[Tuple[str, bool]]:
-    m = re.search(rf"{re.escape(key)}\s*:\s*\[([\s\S]*?)\]", content, flags=re.I)
-    if not m:
-        return []
-    block = m.group(1)
 
+def parse_block_items(block: str) -> List[Tuple[str, bool]]:
     items: List[Tuple[str, bool]] = []
 
     for mm in ROT13_CALL_RE.finditer(block):
@@ -94,7 +89,6 @@ def choose_host_from_urls(raw: str) -> str:
     a = clean_host(raw)
     b = clean_host(rot13(raw))
 
-    # 优先检查是否强制 ROT13 (包含新增的后缀检查)
     if should_force_rot13(raw):
         return b if looks_like_host(b) else a
 
@@ -103,8 +97,6 @@ def choose_host_from_urls(raw: str) -> str:
 
     return a
 
-
-# --- 聚合/格式化逻辑 ---
 
 def label_count(domain: str) -> int:
     return domain.count(".") + 1
@@ -140,7 +132,6 @@ def process_hosts(hosts: Set[str], threshold: int = 2) -> List[str]:
         if not cands:
             break
 
-        # 排序：优先覆盖多 -> 优先长后缀 -> 字母序
         cands.sort(key=lambda x: (-len(x[1]), -label_count(x[0]), x[0]))
         best_suf, covered_hosts = cands[0]
 
@@ -155,11 +146,11 @@ def process_hosts(hosts: Set[str], threshold: int = 2) -> List[str]:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Extract private tracker hosts with aggregation and custom rules.")
-    ap.add_argument("--src", required=True, help="Path to extracted definitions folder")
-    ap.add_argument("--out", default="PrivateTracker.list", help="Output file (default: PrivateTracker.list)")
-    ap.add_argument("--no-comments", action="store_true", help="Do not write '# filename.ts' comment lines")
-    ap.add_argument("--threshold", type=int, default=2, help="Merge to '+.<suffix>' when >=threshold hosts share it (default: 2)")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--src", required=True)
+    ap.add_argument("--out", default="PrivateTracker.list")
+    ap.add_argument("--no-comments", action="store_true")
+    ap.add_argument("--threshold", type=int, default=2)
     args = ap.parse_args()
 
     ts_paths: List[str] = []
@@ -180,19 +171,18 @@ def main():
 
         hosts: Set[str] = set()
 
-        # 处理 urls
-        for val, is_r in extract_array_items(content, "urls"):
-            raw = rot13(val) if is_r else val
-            h = choose_host_from_urls(raw)
-            if looks_like_host(h):
-                hosts.add(h)
-
-        # 处理 formerHosts
-        for val, is_r in extract_array_items(content, "formerHosts"):
-            raw = rot13(val) if is_r else val
-            h = choose_host_from_urls(raw)
-            if looks_like_host(h):
-                hosts.add(h)
+        for match in ARRAY_BLOCK_RE.finditer(content):
+            key = match.group("key").lower()
+            
+            if "url" in key or "host" in key:
+                block = match.group("block")
+                items = parse_block_items(block)
+                
+                for val, is_r in items:
+                    raw = rot13(val) if is_r else val
+                    h = choose_host_from_urls(raw)
+                    if looks_like_host(h):
+                        hosts.add(h)
 
         if not hosts:
             continue
