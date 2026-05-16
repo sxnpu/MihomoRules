@@ -49,6 +49,9 @@
 # audiences.ts
 +.audiences.me
 
+# audionews.ts
++.audionews.org
+
 # avgv.ts
 +.avgv.cc
 
@@ -79,6 +82,9 @@
 # bitporn.ts
 +.bitporn.eu
 
+# bitpt.ts
++.bitpt.cn
+
 # blutopia.ts
 +.blutopia.cc
 +.blutopia.xyz
@@ -97,6 +103,9 @@
 +.bt.byr.cn
 +.byr.pt
 
+# capybarabr.ts
++.capybarabr.com
+
 # carpt.ts
 +.carpt.net
 
@@ -112,6 +121,9 @@
 # cdfile.ts
 +.pt.cdfile.org
 
+# cdy.ts
++.pt.cdy.skin
+
 # cgpeers.ts
 +.cgpeers.com
 +.cgpeers.to
@@ -125,6 +137,12 @@
 
 # cinematik.ts
 +.cinematik.net
+
+# cinemaz.ts
++.cinemaz.to
+
+# clearjav.ts
++.clearjav.com
 
 # cnlang.ts
 +.cnlang.org
@@ -166,6 +184,9 @@
 
 # dragonhd.ts
 +.dragonhd.xyz
+
+# dstudio.ts
++.dstudio.me
 
 # dubhe.ts
 +.dubhe.site
@@ -209,16 +230,31 @@
 # gazellegames.ts
 +.gazellegames.net
 
+# gfxpeers.ts
++.gfxpeers.net
+
 # ggpt.ts
 +.gamegamept.com
 
 # greatposterwall.ts
 +.greatposterwall.com
 
+# gtnet.ts
++.gay-torrents.net
+
+# gtorg.ts
++.gay-torrents.org
+
+# gtru.ts
++.gaytor.rent
++.gaytorrent.ru
+
 # haidan.ts
++.haidan.cc
 +.haidan.video
 
 # happyfappy.ts
++.happyfappy.net
 +.happyfappy.org
 
 # hares.ts
@@ -397,6 +433,9 @@
 # lajidui.ts
 +.pt.lajidui.top
 
+# latteam.ts
++.lat-team.com
+
 # lemonhd.ts
 +.lemonhd.club
 
@@ -462,6 +501,9 @@
 # nanyangpt.ts
 +.nanyangpt.com
 
+# ncore.ts
++.ncore.pro
+
 # nebulance.ts
 +.nebulance.io
 
@@ -473,6 +515,9 @@
 
 # njtupt.ts
 +.njtupt.top
+
+# nordicquality.ts
++.nordicq.org
 
 # novahd.ts
 +.pt.novahd.top
@@ -529,6 +574,15 @@
 # pornbits.ts
 +.pornbits.net
 +.pornbits.org
+
+# pornolab.ts
++.pornolab.net
+
+# portugas.ts
++.portugas.org
+
+# privatehd.ts
++.privatehd.to
 
 # pt99.ts
 +.pt.j99.info
@@ -701,6 +755,9 @@
 # sunnypt.ts
 +.sunnypt.top
 
+# superbits.ts
++.superbits.org
+
 # tangpt.ts
 +.tangpt.top
 
@@ -740,6 +797,9 @@
 +.torrentleech.cc
 +.torrentleech.me
 +.torrentleech.org
+
+# torrentseeds.ts
++.torrentseeds.org
 
 # tosky.ts
 +.t.tosky.club
