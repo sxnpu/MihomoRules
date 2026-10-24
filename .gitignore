@@ -1,0 +1,10 @@
+# 本地跑脚本时可能产生的临时文件
+__pycache__/
+*.pyc
+_upstream/
+pt-depiler/
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store

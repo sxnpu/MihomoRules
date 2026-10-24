@@ -1,0 +1,60 @@
+name: Update PrivateTracker
+
+# 每周一 00:00 UTC 自动更新。
+# GitHub Actions 的 cron 本身就是 UTC，所以 "0 0 * * 1" 就是格林威治时间周一零点，
+# 不需要任何时区换算（要改时间直接改这里即可）。
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "tools/build_private_tracker_rules.py"
+      - ".github/workflows/update-private-tracker.yml"
+
+# 需要写权限才能把更新后的 .list 提交回仓库
+permissions:
+  contents: write
+
+# 同一时间只允许一个实例，避免两次运行抢着 push
+concurrency:
+  group: update-private-tracker
+  cancel-in-progress: false
+
+env:
+  TARGET_FILE: ruleset/PrivateTracker.list
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # 脚本自己下载上游源码包（一次请求，约 5 MB），不逐个抓 raw 文件；
+      # 少于 100 条规则会在脚本里直接失败，不会产出空规则集。
+      - name: 生成规则集
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 tools/build_private_tracker_rules.py --out "$TARGET_FILE"
+
+      - name: 有变化才提交
+        run: |
+          set -euo pipefail
+          # 用 status 而不是 diff：文件还不存在（首次运行）时 diff 看不到未跟踪文件
+          if [ -z "$(git status --porcelain -- "$TARGET_FILE")" ]; then
+            echo "规则集没有变化，跳过提交"
+            exit 0
+          fi
+
+          git --no-pager diff --stat -- "$TARGET_FILE" || true
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$TARGET_FILE"
+          git commit -m "chore(ruleset): 同步 PrivateTracker（$(date -u +%F)）"
+          git push

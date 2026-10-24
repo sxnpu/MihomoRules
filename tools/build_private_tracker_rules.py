@@ -21,13 +21,9 @@
     一条规则就把整个教育网/免费域名服务代理掉。
 
 用法：
-    python tools/build_private_tracker_rules.py                        # 自动下载 master，只收私有站
-    python tools/build_private_tracker_rules.py --include-public      # 连 public 站一起收
-    python tools/build_private_tracker_rules.py --ref release          # 跟随最新正式 release
-    python tools/build_private_tracker_rules.py --ref v0.0.6.1998      # 固定版本
-    python tools/build_private_tracker_rules.py --src ./definitions    # 用本地目录，不联网
-    python tools/build_private_tracker_rules.py --psl ./psl.dat        # 用本地 PSL 文件
-    python tools/build_private_tracker_rules.py --no-psl               # 完全离线，用内置表
+    python tools/build_private_tracker_rules.py                       # 下载 master，生成 ruleset/PrivateTracker.list
+    python tools/build_private_tracker_rules.py --out other.list      # 换个输出路径
+    python tools/build_private_tracker_rules.py --src ./definitions   # 用本地目录，不联网（调试用）
 
 输出示例：
     # mteam
@@ -50,7 +46,10 @@ import urllib.request
 import zipfile
 
 UPSTREAM_REPO = "pt-plugins/PT-depiler"
+UPSTREAM_REF = "master"  # 跟最新提交；release 只有打 tag 时的快照，必然滞后
 DEFINITIONS_REL = "src/packages/site/definitions"
+OUTPUT_FILE = "ruleset/PrivateTracker.list"
+MIN_RULES = 100  # 少于这个数视为上游结构变了，中止且不写文件
 USER_AGENT = "MihomoRules-pt-rules-builder/3.0"
 
 PSL_URL = "https://publicsuffix.org/list/public_suffix_list.dat"
@@ -222,15 +221,9 @@ def parse_psl(path: str) -> set[str]:
     return rules
 
 
-def load_psl(explicit: str | None, cache: str | None) -> tuple[set[str] | None, str]:
-    """返回 (规则集合, 来源说明)。拿不到时返回 (None, 原因)，由调用方降级。"""
-    if explicit:
-        try:
-            return parse_psl(explicit), f"本地文件 {explicit}"
-        except OSError as exc:
-            log(f"warning: 读不了 --psl 文件（{exc}），改用其它来源")
-
-    cache_path = cache or default_psl_cache()
+def load_psl() -> tuple[set[str] | None, str]:
+    """返回 (规则集合, 来源说明)。拿不到时返回 (None, 原因)，由调用方降级到内置表。"""
+    cache_path = default_psl_cache()
     if os.path.exists(cache_path):
         age = time.time() - os.path.getmtime(cache_path)
         if age < PSL_MAX_AGE:
@@ -343,14 +336,6 @@ def _headers(token: str | None) -> dict[str, str]:
     return headers
 
 
-def _get_json(url: str, token: str | None):
-    import json
-
-    req = urllib.request.Request(url, headers=_headers(token))
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-
 def _download(url: str, dst: str, token: str | None, attempts: int = 3) -> None:
     last: object = None
     for attempt in range(1, attempts + 1):
@@ -369,15 +354,6 @@ def _download(url: str, dst: str, token: str | None, attempts: int = 3) -> None:
             log(f"下载失败（第 {attempt}/{attempts} 次）：{last}，5 秒后重试…")
             time.sleep(5)
     raise RuntimeError(f"下载失败：{url}（{last}）")
-
-
-def latest_release_tag(repo: str, token: str | None) -> str:
-    releases = _get_json(f"https://api.github.com/repos/{repo}/releases?per_page=30", token)
-    for rel in releases:
-        if rel.get("draft") or rel.get("prerelease"):
-            continue
-        return rel["tag_name"]
-    raise RuntimeError("上游没有找到正式 release")
 
 
 def download_definitions(repo: str, ref: str, workdir: str, token: str | None) -> str:
@@ -448,8 +424,6 @@ def parse_site(path: str) -> tuple[str, str, list[str]]:
 
 def build_ruleset(
     definitions_dir: str,
-    include_public: bool,
-    with_comments: bool,
     psl_rules: set[str] | None,
 ) -> tuple[list[str], dict[str, int]]:
     files = sorted(
@@ -477,7 +451,7 @@ def build_ruleset(
         stats["files"] += 1
         if not hosts:
             continue
-        if site_type != "private" and not include_public:
+        if site_type != "private":  # 只要私有站
             stats["sites_skipped"] += 1
             continue
 
@@ -501,8 +475,7 @@ def build_ruleset(
 
         if not rules:
             continue
-        if with_comments:
-            lines.append(f"# {site_id}")
+        lines.append(f"# {site_id}")
         lines.extend(rules)
         lines.append("")
 
@@ -515,17 +488,8 @@ def build_ruleset(
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="从 PT-depiler 生成 mihomo 域名规则集")
-    ap.add_argument("--out", default="ruleset/PrivateTracker.list", help="输出文件")
-    ap.add_argument("--src", default=None, help="本地 definitions 目录（给了就不联网取上游）")
-    ap.add_argument("--ref", default="master", help="上游分支或 tag；填 release 表示最新正式 release")
-    ap.add_argument("--repo", default=UPSTREAM_REPO, help="上游仓库")
-    ap.add_argument("--include-public", action="store_true", help="连 public 站一起收录（默认只收 private）")
-    ap.add_argument("--no-comments", action="store_true", help="不输出 # 站点名 注释")
-    ap.add_argument("--min-domains", type=int, default=100, help="少于这个条数视为解析失败并退出")
-    ap.add_argument("--workdir", default=None, help="下载/解压用的临时目录")
-    ap.add_argument("--psl", default=None, help="本地 Public Suffix List 文件（最精确）")
-    ap.add_argument("--psl-cache", default=None, help="PSL 缓存路径（默认 ~/.cache/mihomo-rules/）")
-    ap.add_argument("--no-psl", action="store_true", help="不联网，只用内置后缀表（会过期，不推荐）")
+    ap.add_argument("--out", default=OUTPUT_FILE, help=f"输出文件（默认 {OUTPUT_FILE}）")
+    ap.add_argument("--src", default=None, help="本地 definitions 目录（离线调试用，给了就不联网）")
     args = ap.parse_args()
 
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
@@ -536,37 +500,23 @@ def main() -> int:
             log(f"error: --src 目录不存在：{definitions_dir}")
             return 2
     else:
-        ref = args.ref
-        if ref.lower() == "release":
-            ref = latest_release_tag(args.repo, token)
-            log(f"最新 release：{ref}")
-        workdir = args.workdir or os.path.join(
+        workdir = os.path.join(
             os.environ.get("RUNNER_TEMP") or tempfile.gettempdir(), "pt-depiler"
         )
         try:
-            definitions_dir = download_definitions(args.repo, ref, workdir, token)
+            definitions_dir = download_definitions(UPSTREAM_REPO, UPSTREAM_REF, workdir, token)
         except Exception as exc:  # noqa: BLE001
             log(f"error: 取上游定义失败：{exc}")
             return 1
 
-    if args.psl:
-        psl_rules, psl_source = load_psl(args.psl, None)
-    elif args.no_psl:
-        psl_rules, psl_source = None, "内置表（--no-psl，可能过期）"
-    else:
-        psl_rules, psl_source = load_psl(None, args.psl_cache)
+    psl_rules, psl_source = load_psl()
     log(f"PSL：{psl_source}" + (f"（{len(psl_rules)} 条规则）" if psl_rules else ""))
 
-    lines, stats = build_ruleset(
-        definitions_dir,
-        include_public=args.include_public,
-        with_comments=not args.no_comments,
-        psl_rules=psl_rules,
-    )
+    lines, stats = build_ruleset(definitions_dir, psl_rules=psl_rules)
 
-    if stats["rules"] < args.min_domains:
+    if stats["rules"] < MIN_RULES:
         log(
-            f"error: 只生成 {stats['rules']} 条规则（阈值 {args.min_domains}），"
+            f"error: 只生成 {stats['rules']} 条规则（阈值 {MIN_RULES}），"
             f"上游目录结构可能变了，已中止，未写文件"
         )
         return 1
